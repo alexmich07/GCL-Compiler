@@ -8,7 +8,7 @@ COMPILER gcl
 		TypeDescriptor noType = SemanticActions.NO_TYPE;
 
 /*==========================================================*/
-CHARACTERS 
+CHARACTERS
   letter = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz".
   digit = "0123456789".
   eol = '\r'.
@@ -20,7 +20,7 @@ TOKENS
   identifier  = letter {letter | digit | underscore }.
   numeral = digit {digit}.
 
-PRAGMAS 
+PRAGMAS
 	option1 = "$"("c"|"C")("+"|"-").
 		(. CompilerOptions.listCode = la.val.charAt(2) == '+'; .)
 	option3 = "$"("o"|"O")("+"|"-").
@@ -43,13 +43,16 @@ PRODUCTIONS
 gcl
 =
 	(. semantic.startCode();  SymbolTable scope = SymbolTable.currentScope(); .)
-	SYNC module<scope> 
-	{ (. scope = scope.openScope(true); .) SYNC module<scope> } 
+	SYNC module<scope>
+	{ (. scope = scope.openScope(true); .) SYNC module<scope> }
 	(. semantic.finishCode(); .) .
 /*----------------------------------------------------------*/
-module<SymbolTable scope> 
-= 
-	block<scope> "." .
+module<SymbolTable scope>
+=
+	"module" identifier
+		definitionPart<scope>
+	[ "private" (. SymbolTable privateScope = scope.openScope(false); .)
+		block<privateScope> ] "." .
 /*----------------------------------------------------------*/
 block<SymbolTable scope>
 =
@@ -57,15 +60,15 @@ block<SymbolTable scope>
 /*----------------------------------------------------------*/
 definitionPart<SymbolTable scope>   =    {SYNC definition<scope> WEAK ";" }.
 /*----------------------------------------------------------*/
-statementPart<SymbolTable scope> 
-= 
+statementPart<SymbolTable scope>
+=
 	SYNC statement<scope> WEAK ";" { SYNC statement<scope> WEAK ";"}.
 /*----------------------------------------------------------*/
-definition<SymbolTable scope>  
-=  
+definition<SymbolTable scope>
+=
 	variableDefinition<scope, ParameterKind.NOT_PARAM>  .
 /*----------------------------------------------------------*/
-variableDefinition<SymbolTable scope, ParameterKind kindOfParam> 
+variableDefinition<SymbolTable scope, ParameterKind kindOfParam>
 	(. TypeDescriptor type; Identifier id; .)
 =
 	type<^type, scope> identifier
@@ -84,22 +87,23 @@ type<^TypeDescriptor result, SymbolTable scope>	(. result = noType; .)
 /*----------------------------------------------------------*/
 typeSymbol<^TypeDescriptor result>
 =
-	"integer" (. result = integerType; .).
+	"integer" (. result = integerType; .)
+	| "Boolean" (. result = booleanType; .).
 /*----------------------------------------------------------*/
 tupleType<^TupleType result, SymbolTable scope>   (. TypeDescriptor type; Identifier id; .)
 =
 	(. TypeList carrier = new TypeList(); .)
-	"tuple" "[" typeSymbol<^type> identifier 
+	"tuple" "[" typeSymbol<^type> identifier
 		(.id = new Identifier(currentToken().spelling()); carrier.enter(type, id);.)
-		{  "," typeSymbol<^type> identifier 
-		(.id = new Identifier(currentToken().spelling()); carrier.enter(type, id);.) 
-		} 
+		{  "," typeSymbol<^type> identifier
+		(.id = new Identifier(currentToken().spelling()); carrier.enter(type, id);.)
+		}
 	"]"
      (. result = new TupleType(carrier); .) .
 /*----------------------------------------------------------*/
 statement<SymbolTable scope>
 =
-	emptyStatement | readStatement<scope>  | writeStatement<scope> 
+	emptyStatement | readStatement<scope>  | writeStatement<scope>
 	| assignStatement<scope> | ifStatement<scope>.
 /*----------------------------------------------------------*/
 emptyStatement     = "skip".
@@ -127,7 +131,7 @@ assignStatement<SymbolTable scope>
 /*----------------------------------------------------------*/
 ifStatement<SymbolTable scope>  (. GCRecord ifRecord; .)
 =
-	"if" (. ifRecord = semantic.startIf(); .)  guardedCommandList<scope, ifRecord > 
+	"if" (. ifRecord = semantic.startIf(); .)  guardedCommandList<scope, ifRecord >
 	"fi" (. semantic.endIf(ifRecord); .).
 /*----------------------------------------------------------*/
 guardedCommandList<SymbolTable scope, GCRecord ifRecord>
@@ -155,7 +159,7 @@ simpleExpr<^Expression left, SymbolTable scope>
 	(. Expression right; AddOperator op; left = null; .)
 =
 	(	["+"]term<^ left, scope>
-		|  "-" term<^ left, scope>  
+		|  "-" term<^ left, scope>
 					(. left = semantic.negateExpression(left); .)
 	)
 	{  	addOperator<^op>  term<^right, scope>
@@ -174,6 +178,7 @@ factor<^Expression result, SymbolTable scope>  (. result = null; .)
 	|  numeral
 	  (. result = new ConstantExpression (integerType, Integer.parseInt(currentToken().spelling()));
 	  .)
+	| booleanConstant
 	| "(" expression<^result, scope> ")"
 	| (. Expression exp;
 		 ExpressionList tupleFields = new ExpressionList();
@@ -185,10 +190,16 @@ factor<^Expression result, SymbolTable scope>  (. result = null; .)
 		 }
 		"]"  (. result = semantic.buildTuple(tupleFields); .).
 /*----------------------------------------------------------*/
+booleanConstant = "true" | "false" .
+/*----------------------------------------------------------*/
 relationalOperator<^RelationalOperator op>  (. op = null; .)
 =
 	"="  (. op = RelationalOperator.EQUAL; .)
-	| "#" (. op = RelationalOperator.NOT_EQUAL; .).
+	| "#" (. op = RelationalOperator.NOT_EQUAL; .)
+	| ">" (. op = RelationalOperator.GREATER_THAN; .)
+	| ">=" (. op = RelationalOperator.GREATER_THAN_OR_EQUAL; .)
+	| "<" (. op = RelationalOperator.LESS_THAN; .)
+	| "<=" (. op = RelationalOperator.LESS_THAN_OR_EQUAL; .).
 /*----------------------------------------------------------*/
 addOperator<^AddOperator op > (. op = null; .)
  =
@@ -199,14 +210,15 @@ multiplyOperator<^MultiplyOperator op > 	(. op = null; .)
 =
 	"*"   (. op = MultiplyOperator.TIMES; .)
 	| "/"  (. op = MultiplyOperator.DIVIDE; .).
+	/*| "\\"  (. op = MultiplyOperator.MODULO; .).*/
 /*----------------------------------------------------------*/
-qualifiedIdentifier<^SemanticItem result, SymbolTable scope> 
+qualifiedIdentifier<^SemanticItem result, SymbolTable scope>
 =
-identifier (. Identifier id = new Identifier(currentToken().spelling()); 
+identifier (. Identifier id = new Identifier(currentToken().spelling());
 			result = semantic.semanticValue(scope, id); .) .
 /*----------------------------------------------------------*/
-variableAccessEtc<^Expression result, SymbolTable scope>  
-      (. SemanticItem workValue; .)   
+variableAccessEtc<^Expression result, SymbolTable scope>
+      (. SemanticItem workValue; .)
 =
 qualifiedIdentifier<^workValue, scope> (. result = workValue.expectExpression(err); .) .
 

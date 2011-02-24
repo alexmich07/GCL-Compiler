@@ -1,5 +1,7 @@
 package gcl;
 
+import gcl.Codegen.Location;
+
 import java.util.Iterator;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -30,7 +32,7 @@ abstract class SemanticItem {
 	/**
 	 * Polymorphically guarantee that a SemanticItem is an expression. This is
 	 * an example of a soft cast.
-	 * 
+	 *
 	 * @return "this" if it is an expression and an ErrorExpression otherwise.
 	 */
 	public Expression expectExpression(final SemanticActions.GCLErrorStream err) {
@@ -128,7 +130,15 @@ final class RelationalOperator extends Operator {
 	public static final RelationalOperator EQUAL = new RelationalOperator(
 			"equal", JEQ);
 	public static final RelationalOperator NOT_EQUAL = new RelationalOperator(
-			"notequal", JNE);
+			"not equal", JNE);
+	public static final RelationalOperator GREATER_THAN = new RelationalOperator(
+			"greater than", JGT);
+	public static final RelationalOperator GREATER_THAN_OR_EQUAL = new RelationalOperator(
+			"greater than", JGE);
+	public static final RelationalOperator LESS_THAN = new RelationalOperator(
+			"greater than", JLT);
+	public static final RelationalOperator LESS_THAN_OR_EQUAL = new RelationalOperator(
+			"greater than", JLE);
 
 	private RelationalOperator(final String op, final SamOp opcode) {
 		super(op, opcode);
@@ -156,6 +166,8 @@ final class MultiplyOperator extends Operator {
 			IM);
 	public static final MultiplyOperator DIVIDE = new MultiplyOperator(
 			"divide", ID);
+	/*public static final MultiplyOperator MODULO = new MultiplyOperator(
+			"modulo", );*/
 
 	private MultiplyOperator(final String op, final SamOp opcode) {
 		super(op, opcode);
@@ -174,7 +186,7 @@ abstract class Expression extends SemanticItem implements Codegen.MaccSaveable {
 	/**
 	 * Polymorphically determine if an expression needs to be pushed on the run
 	 * stack as part of parallel assignment.
-	 * 
+	 *
 	 * @return true if the expression could appear as a LHS operand.
 	 */
 	public boolean needsToBePushed() {
@@ -198,7 +210,7 @@ abstract class Expression extends SemanticItem implements Codegen.MaccSaveable {
 /** Used to represent errors where expressions are expected. Immutable. */
 class ErrorExpression extends Expression implements GeneralError,
 		CodegenConstants {
-	
+
 	private final String message;
 
 	public ErrorExpression(final String message) {
@@ -218,7 +230,7 @@ class ErrorExpression extends Expression implements GeneralError,
  */
 class ConstantExpression extends Expression implements CodegenConstants,
 		Codegen.ConstantLike {
-	
+
 	private final int value;
 
 	public ConstantExpression(final TypeDescriptor type, final int value) {
@@ -251,13 +263,13 @@ class ConstantExpression extends Expression implements CodegenConstants,
  * Objects here are immutable. A level 0 expression is a temporary.
  */
 class VariableExpression extends Expression implements CodegenConstants {
-	
+
 	private final int offset; // relative offset of cell or register number
 	private final boolean isDirect; // if false this is a pointer to a location.
-	
+
 	/**
 	 * Create a variable expression object
-	 * 
+	 *
 	 * @param type the type of this variable
 	 * @param scope the nesting level (if >0) or 0 for a register, or -1 for stacktop
 	 * @param offset the relative offset of the cells of this variable, or the
@@ -274,7 +286,7 @@ class VariableExpression extends Expression implements CodegenConstants {
 	/**
 	 * Create a temporary expression. The level is 0 and the offset is the
 	 * register number
-	 * 
+	 *
 	 * @param type the type of this value
 	 * @param register the register number in which to hold it
 	 * @param direct is the value in the register (true) or a pointer (false)
@@ -291,7 +303,7 @@ class VariableExpression extends Expression implements CodegenConstants {
 	/**
 	 * The relative address of the variable. What it is relative to depends on
 	 * its scopeLevel. If the level is 1 it is relative to R15.
-	 * 
+	 *
 	 * @return the relative offset from its base register.
 	 */
 	public int offset() {
@@ -319,10 +331,10 @@ class VariableExpression extends Expression implements CodegenConstants {
 
 /** Carries information needed by the assignment statement */
 class AssignRecord extends SemanticItem {
-	
+
 	private final ArrayList<Expression> lhs = new ArrayList<Expression>(3);
 	private final ArrayList<Expression> rhs = new ArrayList<Expression>(3);
-	
+
 	public void left(Expression left) {
 		if (left == null) {
 			left = new ErrorExpression("$ Pushing bad lhs in assignment.");
@@ -347,7 +359,7 @@ class AssignRecord extends SemanticItem {
 
 	/**
 	 * Determine whether the assignment statement is legal.
-	 * 
+	 *
 	 * @return true if there are the same number of operands on the left and
 	 *         right and the types are compatible, etc.
 	 */
@@ -364,7 +376,7 @@ class AssignRecord extends SemanticItem {
 	/**
 	 * The number of matched operands of a parallel assignment. In an incorrect
 	 * input program the lhs and rhs may not match.
-	 * 
+	 *
 	 * @return the min number of lhs, rhs variable expressions.
 	 */
 	public int size() {
@@ -379,7 +391,7 @@ class AssignRecord extends SemanticItem {
 class ExpressionList extends SemanticItem {
 	/**
 	 * Enter a new expression into the list
-	 * 
+	 *
 	 * @param expression the expression to be entered
 	 */
 	public void enter(final Expression expression) {
@@ -389,7 +401,7 @@ class ExpressionList extends SemanticItem {
 	/**
 	 * Provide an enumeration service over the expressions in the list in the
 	 * order they were inserted.
-	 * 
+	 *
 	 * @return an enumeration over the expressions.
 	 */
 	public Iterator<Expression> elements() {
@@ -416,7 +428,7 @@ class GCRecord extends SemanticItem // For guarded command statements if and do.
 {
 	private final int outLabel;
 	private int nextLabel;
-	
+
 	public GCRecord(final int outLabel, final int nextLabel) {
 		this.outLabel = outLabel;
 		this.nextLabel = nextLabel;
@@ -424,7 +436,7 @@ class GCRecord extends SemanticItem // For guarded command statements if and do.
 
 	/**
 	 * Mutator for the internal label in an if or do.
-	 * 
+	 *
 	 * @param label The new value for this label.
 	 */
 	public void nextLabel(int label) {
@@ -433,7 +445,7 @@ class GCRecord extends SemanticItem // For guarded command statements if and do.
 
 	/**
 	 * Returns the current value of the "internal" label of an if or do.
-	 * 
+	 *
 	 * @return the "next" label to appear in a sequence.
 	 */
 	public int nextLabel() {
@@ -442,7 +454,7 @@ class GCRecord extends SemanticItem // For guarded command statements if and do.
 
 	/**
 	 * The external label of an if or do statement.
-	 * 
+	 *
 	 * @return the external label's numeric value.
 	 */
 	public int outLabel() {
@@ -461,7 +473,7 @@ class GCRecord extends SemanticItem // For guarded command statements if and do.
  * locked.
  */
 abstract class TypeDescriptor extends SemanticItem implements Cloneable {
-	
+
 	private int size = 0; // default size. This varies in subclasses.
 
 	public TypeDescriptor(final int size) {
@@ -470,7 +482,7 @@ abstract class TypeDescriptor extends SemanticItem implements Cloneable {
 
 	/**
 	 * The number of bytes required to store a variable of this type.
-	 * 
+	 *
 	 * @return the byte size.
 	 */
 	public int size() {
@@ -480,7 +492,7 @@ abstract class TypeDescriptor extends SemanticItem implements Cloneable {
 	/**
 	 * Determine if two types are assignment (or other) compatible. This must be
 	 * a reflexive, symmetric, and transitive relation.
-	 * 
+	 *
 	 * @param other the other type to be compared to this.
 	 * @return true if they are compatible.
 	 */
@@ -492,7 +504,7 @@ abstract class TypeDescriptor extends SemanticItem implements Cloneable {
 	/**
 	 * Polymorphically determine the underlying type of this type. Useful mostly
 	 * for range types.
-	 * 
+	 *
 	 * @return this for non-ranges. The base type for ranges.
 	 */
 	public TypeDescriptor baseType() {
@@ -568,15 +580,15 @@ class BooleanType extends TypeDescriptor implements CodegenConstants {
  * all of them. Used in creation of tuples.
  */
 class TypeList extends SemanticItem {
-	
+
 	private final ArrayList<TypeDescriptor> elements = new ArrayList<TypeDescriptor>(2);
 	private final ArrayList<Identifier> names = new ArrayList<Identifier>(2);
 	private int size = 0; // sum of the sizes of the types
 	private static int next = 0;
-	
+
 	/**
 	 * Add a new type-name pair to the list and accumulate its size
-	 * 
+	 *
 	 * @param aType the type to be added
 	 * @param name the name associated with the field
 	 */
@@ -589,7 +601,7 @@ class TypeList extends SemanticItem {
 	/**
 	 * Add a new type to the list, using a default name This is used to define
 	 * anonymous fields in a tuple value
-	 * 
+	 *
 	 * @param aType the type of the entry to be added
 	 */
 	public void enter(final TypeDescriptor aType) {
@@ -599,7 +611,7 @@ class TypeList extends SemanticItem {
 
 	/**
 	 * The total size of the types in the list
-	 * 
+	 *
 	 * @return the sum of the sizes
 	 */
 	public int size() {
@@ -608,7 +620,7 @@ class TypeList extends SemanticItem {
 
 	/**
 	 * An enumeration service for the types in the list in order of insertion
-	 * 
+	 *
 	 * @return an enumeration over the type descriptors.
 	 */
 	public Iterator<TypeDescriptor> elements() {
@@ -617,7 +629,7 @@ class TypeList extends SemanticItem {
 
 	/**
 	 * An enumeration service for the names of the fields
-	 * 
+	 *
 	 * @return an enumeration over the identifiers
 	 */
 	public Iterator<Identifier> names() {
@@ -631,7 +643,7 @@ class TypeList extends SemanticItem {
  */
 class TupleType extends TypeDescriptor { // mutable
 	// TODO must override isCompatible
-	
+
 	private final HashMap<Identifier, TupleField> fields = new HashMap<Identifier, TupleField>(4);
 	private final ArrayList<Identifier> names = new ArrayList<Identifier>(4);
 	private SymbolTable methods = null; // later
@@ -639,7 +651,7 @@ class TupleType extends TypeDescriptor { // mutable
 	/**
 	 * Create a tuple type from a list of its component types. We will need to
 	 * add the "methods" to this later.
-	 * 
+	 *
 	 * @param carrier the list of component types
 	 */
 	public TupleType(final TypeList carrier) {
@@ -669,7 +681,7 @@ class TupleType extends TypeDescriptor { // mutable
 
 	/**
 	 * Get the number of data fields in this tuple
-	 * 
+	 *
 	 * @return the number of fields in this tuple
 	 */
 	public int fieldCount() {
@@ -679,13 +691,13 @@ class TupleType extends TypeDescriptor { // mutable
 	/**
 	 * Retrieve a named component type of the tuple. It might throw
 	 * NoSuchElementException if the argument is invalid.
-	 * 
+	 *
 	 * @param fieldName
 	 *            the name of the desired component type
 	 * @return the type of the named component
 	 */
 	public TypeDescriptor getType(final Identifier fieldName) { // null return value possible
-	
+
 		return fields.get(fieldName).type();
 	}
 
@@ -739,7 +751,7 @@ abstract class GCLError {
 			"ERROR -> The Left Hand Side is not a variable access. ");
 	static final GCLError EXPRESSION_REQUIRED = new Value(7,
 			"ERROR -> Expression required. ");
-	
+
 	// The following are compiler errors. Repair them.
 	static final GCLError ILLEGAL_LOAD = new Value(92,
 			"COMPILER ERROR -> The expression is null. ");
@@ -784,7 +796,7 @@ abstract class GCLError {
 // --------------------- SemanticActions ---------------------------------
 
 public class SemanticActions implements Mnemonic, CodegenConstants {
-	
+
 	private final Codegen codegen;
 
 	static final IntegerType INTEGER_TYPE = IntegerType.INTEGER_TYPE;
@@ -824,7 +836,7 @@ public class SemanticActions implements Mnemonic, CodegenConstants {
 	/***************************************************************
 	 * Auxiliary Determine if a symboltable entry can safely be
 	 * redefined at this point. Only one definition is legal in a given scope.
-	 * 
+	 *
 	 * @param entry a symbol table entry to be checked.
 	 * @return true if it is ok to redefine this entry at this point.
 	 */
@@ -838,7 +850,7 @@ public class SemanticActions implements Mnemonic, CodegenConstants {
 	/***************************************************************************
 	 * Auxiliary Report that the identifier is already
 	 * defined in this scope if it is. Called from most declarations.
-	 * 
+	 *
 	 * @param ID an Identifier
 	 * @param scope the symbol table used to find the identifier.
 	 **************************************************************************/
@@ -915,7 +927,7 @@ public class SemanticActions implements Mnemonic, CodegenConstants {
 		codegen.freeTemp(DREG, reg);
 		codegen.freeTemp(destinationLocation);
 	}
-	
+
 	/** Set a bit of a word corresponding to a register number.
 	 * @param reg the register to transform
 	 * @return an integer with one bit set
@@ -926,7 +938,7 @@ public class SemanticActions implements Mnemonic, CodegenConstants {
 
 	/**
 	 * auxiliary Push an expression onto the run time stack
-	 * 
+	 *
 	 * @param source the expression to be pushed
 	 */
 	private void pushExpression(final Expression source) {
@@ -944,7 +956,7 @@ public class SemanticActions implements Mnemonic, CodegenConstants {
 	/**
 	 * **************** auxiliary Pop an expression from the run time stack into
 	 * a given destination
-	 * 
+	 *
 	 * @param destination
 	 *            the destination for the pop
 	 */
@@ -967,7 +979,7 @@ public class SemanticActions implements Mnemonic, CodegenConstants {
 	/**
 	 * auxiliary Move the value of an expression from its
 	 * source to a destination
-	 * 
+	 *
 	 * @param source the source of the expression
 	 * @param destination the destination to which to move the value
 	 */
@@ -986,7 +998,7 @@ public class SemanticActions implements Mnemonic, CodegenConstants {
 	/**
 	 * **************** auxiliary Move the value of an expression from a source
 	 * to a destination
-	 * 
+	 *
 	 * @param source the source of the move
 	 * @param mode the mode of the destination's location
 	 * @param base the base of the destination location
@@ -1006,7 +1018,7 @@ public class SemanticActions implements Mnemonic, CodegenConstants {
 
 	/***************************************************************************
 	 * Transform an identifier into the semantic item that it represents
-	 * 
+	 *
 	 * @param scope the current scope
 	 * @param ID and identifier to be transformed
 	 * @return the semantic item that the identifier represents.
@@ -1024,7 +1036,7 @@ public class SemanticActions implements Mnemonic, CodegenConstants {
 	/***************************************************************************
 	 * Generate code for an assignment. Copy the RHS expressions to the
 	 * corresponding LHS variables.
-	 * 
+	 *
 	 * @param expressions an assignment record with two expr vectors (RHSs, LHSs )
 	 **************************************************************************/
 	void parallelAssign(final AssignRecord expressions) {
@@ -1058,7 +1070,7 @@ public class SemanticActions implements Mnemonic, CodegenConstants {
 	/***************************************************************************
 	 * Generate code to read into an integer variable. (Must be an assignable
 	 * variable)
-	 * 
+	 *
 	 * @param expression
 	 *            (integer variable) expression
 	 **************************************************************************/
@@ -1076,7 +1088,7 @@ public class SemanticActions implements Mnemonic, CodegenConstants {
 
 	/***************************************************************************
 	 * Generate code to write an integer expression.
-	 * 
+	 *
 	 * @param expression (integer) expression
 	 **************************************************************************/
 	void writeExpression(final Expression expression) {
@@ -1101,7 +1113,7 @@ public class SemanticActions implements Mnemonic, CodegenConstants {
 
 	/***************************************************************************
 	 * Generate code to add two integer expressions. Result in Register.
-	 * 
+	 *
 	 * @param left an expression (lhs)Must be integer
 	 * @param op an add operator
 	 * @param right an expression (rhs)Must be integer
@@ -1117,7 +1129,7 @@ public class SemanticActions implements Mnemonic, CodegenConstants {
 
 	/***************************************************************************
 	 * Generate code to negate an integer expression. Result in Register.
-	 * 
+	 *
 	 * @param expression expression to be negated -must be integer
 	 * @return result expression -integer (in register)
 	 **************************************************************************/
@@ -1131,7 +1143,7 @@ public class SemanticActions implements Mnemonic, CodegenConstants {
 
 	/***************************************************************************
 	 * Generate code to multiply two integer expressions. Result in Register.
-	 * 
+	 *
 	 * @param left an expression (lhs)Must be integer
 	 * @param op a multiplicative operator
 	 * @param right an expression (rhs)Must be integer
@@ -1148,7 +1160,7 @@ public class SemanticActions implements Mnemonic, CodegenConstants {
 
 	/***************************************************************************
 	 * Generate code to compare two expressions. Result (0-1) in Register.
-	 * 
+	 *
 	 * @param left an expression (lhs)
 	 * @param op a relational operator
 	 * @param right an expression (rhs)
@@ -1169,8 +1181,22 @@ public class SemanticActions implements Mnemonic, CodegenConstants {
 	}
 
 	/***************************************************************************
+	 * Generate code to negate a boolean value. Result in Register.
+	 *
+	 * @param value to be negated -must be boolean
+	 * @return result expression -integer (in register)
+	 **************************************************************************/
+	Expression negateBooleanValue(final Expression value) {
+		int booleanRegister = codegen.getTemp(1);
+		codegen.gen2Address(LD, booleanRegister, IMMED, UNUSED, 1);
+		Codegen.Location booleanLocation = codegen.buildOperands(value);
+		codegen.freeTemp(booleanLocation);
+		return new VariableExpression(BOOLEAN_TYPE, booleanRegister, DIRECT); // temporary
+	}
+
+	/***************************************************************************
 	 * Create a label record with the outlabel for an IF statement.
-	 * 
+	 *
 	 * @return GCRecord entry with two label slots for this statement.
 	 **************************************************************************/
 	GCRecord startIf() {
@@ -1179,7 +1205,7 @@ public class SemanticActions implements Mnemonic, CodegenConstants {
 
 	/***************************************************************************
 	 * Generate the final label for an IF. (Halt of we fall through to here).
-	 * 
+	 *
 	 * @param entry GCRecord holding the labels for this statement.
 	 **************************************************************************/
 	void endIf(final GCRecord entry) {
@@ -1189,7 +1215,7 @@ public class SemanticActions implements Mnemonic, CodegenConstants {
 
 	/***************************************************************************
 	 * If the expr represents true, jump to the next else part.
-	 * 
+	 *
 	 * @param expression Expression to be tested: must be boolean
 	 * @param entry GCRecord with the associated labels. This is updated
 	 **************************************************************************/
@@ -1204,7 +1230,7 @@ public class SemanticActions implements Mnemonic, CodegenConstants {
 
 	/***************************************************************************
 	 * Generate a jump to the out label and insert the next else label.
-	 * 
+	 *
 	 * @param entry GCRecord with the labels
 	 **************************************************************************/
 	void elseIf(final GCRecord entry) {
@@ -1215,7 +1241,7 @@ public class SemanticActions implements Mnemonic, CodegenConstants {
 	/***************************************************************************
 	 * Create a tuple from a list of expressions Both the type and the value
 	 * must be created.
-	 * 
+	 *
 	 * @param tupleFields an expression list with the fields of the tuple
 	 * @return an expression representing the tuple value as a whole.
 	 **************************************************************************/
@@ -1242,7 +1268,7 @@ public class SemanticActions implements Mnemonic, CodegenConstants {
 	 * Enter the identifier into the symbol table, marking it as a variable of
 	 * the given type. This method handles global variables as well as local
 	 * variables and procedure parameters.
-	 * 
+	 *
 	 * @param scope the current symbol table
 	 * @param type the type to be of the variable being defined
 	 * @param ID identifier to be defined
@@ -1282,7 +1308,7 @@ public class SemanticActions implements Mnemonic, CodegenConstants {
 	/**
 	 * Get a reference to the object that maintains the current semantic
 	 * (procedure nesting) level.
-	 * 
+	 *
 	 * @return the current semantic level object.
 	 */
 	SemanticLevel currentLevel() {
@@ -1305,7 +1331,7 @@ public class SemanticActions implements Mnemonic, CodegenConstants {
 
 		/**
 		 * The semantic level's integer value
-		 * 
+		 *
 		 * @return the semantic level as an int. Never less than one.
 		 */
 		public int value() {
@@ -1314,7 +1340,7 @@ public class SemanticActions implements Mnemonic, CodegenConstants {
 
 		/**
 		 * Determine if the semantic level represents the global (i.e. 1) level.
-		 * 
+		 *
 		 * @return true if the level is global. False if it is procedural at any
 		 *         level.
 		 */
@@ -1331,7 +1357,7 @@ public class SemanticActions implements Mnemonic, CodegenConstants {
 		}
 
 		private SemanticLevel() {
-		// nothing. 
+		// nothing.
 		}
 		// can create a new object only within the containing class
 	}
